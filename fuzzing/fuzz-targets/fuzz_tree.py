@@ -21,7 +21,7 @@ import atheris
 import io
 import sys
 import os
-import shutil
+import tempfile
 
 if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
     path_to_bundled_git_binary = os.path.abspath(os.path.join(os.path.dirname(__file__), "git"))
@@ -33,29 +33,28 @@ with atheris.instrument_imports():
 
 def TestOneInput(data):
     fdp = atheris.FuzzedDataProvider(data)
-    git_dir = "/tmp/.git"
-    head_file = os.path.join(git_dir, "HEAD")
-    refs_dir = os.path.join(git_dir, "refs")
-    common_dir = os.path.join(git_dir, "commondir")
-    objects_dir = os.path.join(git_dir, "objects")
 
-    if os.path.isdir(git_dir):
-        shutil.rmtree(git_dir)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        git_dir = os.path.join(temp_dir, ".git")
+        head_file = os.path.join(git_dir, "HEAD")
+        refs_dir = os.path.join(git_dir, "refs")
+        common_dir = os.path.join(git_dir, "commondir")
+        objects_dir = os.path.join(git_dir, "objects")
 
-    os.mkdir(git_dir)
-    with open(head_file, "w") as f:
-        f.write(fdp.ConsumeUnicodeNoSurrogates(1024))
-    os.mkdir(refs_dir)
-    os.mkdir(common_dir)
-    os.mkdir(objects_dir)
+        os.mkdir(git_dir)
+        with open(head_file, "w") as f:
+            f.write(fdp.ConsumeUnicodeNoSurrogates(1024))
+        os.mkdir(refs_dir)
+        os.mkdir(common_dir)
+        os.mkdir(objects_dir)
 
-    _repo = git.Repo("/tmp/")
+        _repo = git.Repo(temp_dir)
 
-    fuzz_tree = git.Tree(_repo, git.Tree.NULL_BIN_SHA, 0, "")
-    try:
-        fuzz_tree._deserialize(io.BytesIO(data))
-    except IndexError:
-        return -1
+        fuzz_tree = git.Tree(_repo, git.Tree.NULL_BIN_SHA, 0, "")
+        try:
+            fuzz_tree._deserialize(io.BytesIO(data))
+        except IndexError:
+            return -1
 
 
 def main():
